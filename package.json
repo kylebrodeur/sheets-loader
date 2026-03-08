@@ -2,11 +2,30 @@
   "name": "@kylebrodeur/sheets-loader",
   "version": "0.1.0",
   "description": "A TypeScript library for loading and caching data from Google Sheets with OAuth support",
+  "keywords": [
+    "google-sheets",
+    "sheets",
+    "google-api",
+    "typescript",
+    "oauth",
+    "service-account",
+    "cache",
+    "data-loader",
+    "spreadsheet",
+    "csv",
+    "rows",
+    "mapping",
+    "type-safe"
+  ],
   "private": false,
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "repository": {
     "type": "git",
@@ -18,11 +37,20 @@
   "homepage": "https://github.com/kylebrodeur/sheets-loader#readme",
   "author": "Kyle Brodeur",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "lint": "eslint .",
-    "test": "vitest",
-    "typecheck": "tsc --noEmit"
+    "lint": "eslint src tests",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "demo": "tsx examples/demo.ts",
+    "prepublishOnly": "pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
     "@kylebrodeur/type-safe-mapping": "^0.1.1",
@@ -31,13 +59,17 @@
     "node-cache": "^5.1.2"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^20.0.0",
     "@types/node-cache": "^4.2.5",
-    "@typescript-eslint/eslint-plugin": "^5.0.0",
-    "@typescript-eslint/parser": "^5.0.0",
-    "eslint": "^8.0.0",
+    "eslint": "^10.0.0",
+    "eslint-plugin-prettier": "^5.5.5",
+    "globals": "^17.3.0",
+    "prettier": "^3.8.1",
     "ts-node": "^10.0.0",
-    "typescript": "^5.0.0",
-    "vitest": "^1.0.0"
+    "tsx": "^4.0.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.55.0",
+    "vitest": "^4.0.18"
   }
 }

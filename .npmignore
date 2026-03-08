@@ -1,0 +1,43 @@
+# Source files
+src/
+tests/
+
+# Config files
+tsconfig.json
+vitest.config.ts
+eslint.config.mjs
+
+# Development files
+.github/
+examples/
+*.test.ts
+*.spec.ts
+
+# IDE
+.vscode/
+.idea/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Misc
+node_modules/
+.DS_Store
+*.log
+.env
+.env.*
+.agent/
+tsconfig.tsbuildinfo
+
+# Development docs that shouldn't be in npm package
+CONTRIBUTING.md
+docs/
+
+# Keep these in the package
+!dist/
+!README.md
+!LICENSE
+!CHANGELOG.md
+!package.json
