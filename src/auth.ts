@@ -33,7 +33,14 @@ export async function getAuthClient(config?: AuthConfig): Promise<JWT | OAuth2Cl
     }
 
     // OAuth2 credential object (client + refresh_token/access_token)
-    const oa = creds as { client_id?: string; client_secret?: string; refresh_token?: string; access_token?: string } | undefined;
+    const oa = creds as
+      | {
+          client_id?: string;
+          client_secret?: string;
+          refresh_token?: string;
+          access_token?: string;
+        }
+      | undefined;
     if (oa && oa.client_id && oa.client_secret) {
       const o2 = new OAuth2Client(oa.client_id, oa.client_secret);
       if (oa.refresh_token || oa.access_token) {
@@ -53,6 +60,6 @@ export async function getAuthClient(config?: AuthConfig): Promise<JWT | OAuth2Cl
     });
     return (await ga.getClient()) as JWT | OAuth2Client;
   } catch (err: unknown) {
-    throw new Error('Failed to create auth client', { cause: err as Error });
+    throw new Error('Failed to create auth client', { cause: err });
   }
 }

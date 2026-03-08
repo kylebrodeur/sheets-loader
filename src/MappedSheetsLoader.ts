@@ -1,4 +1,5 @@
-import { MappedServiceBase, MappingDefinition, MappedType } from '@kylebrodeur/type-safe-mapping';
+import { MappedServiceBase } from '@kylebrodeur/type-safe-mapping';
+import type { MappingDefinition, MappedType } from '@kylebrodeur/type-safe-mapping';
 
 /**
  * Minimal interface that any Google Sheets source must satisfy.

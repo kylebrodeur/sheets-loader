@@ -9,7 +9,7 @@
  *   SA_EMAIL=<email> SA_KEY=<key> SHEET_ID=<id> npx ts-node examples/mapped-loader.ts
  */
 
-import { SheetsLoader, MappedSheetsLoader } from '../src';
+import { SheetsLoader, MappedSheetsLoader } from '../src/index.js';
 import type { MappingDefinition } from '@kylebrodeur/type-safe-mapping';
 
 // ── 1. Declare the shape that matches your sheet's column headers exactly ──────
