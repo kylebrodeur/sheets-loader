@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+
+# Production
+dist/
+build/
+
+# TypeScript
+*.tsbuildinfo
+*.d.ts.map
+
+# Misc
+.DS_Store
+*.log
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Cache
+.cache/
+.eslintcache
+.agent/
+
+# Google OAuth credentials (IMPORTANT!)
+credentials.json
+token.json

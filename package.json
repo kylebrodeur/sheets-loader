@@ -1,0 +1,43 @@
+{
+  "name": "@kylebrodeur/sheets-loader",
+  "version": "0.1.0",
+  "description": "A TypeScript library for loading and caching data from Google Sheets with OAuth support",
+  "private": false,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kylebrodeur/sheets-loader.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kylebrodeur/sheets-loader/issues"
+  },
+  "homepage": "https://github.com/kylebrodeur/sheets-loader#readme",
+  "author": "Kyle Brodeur",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@kylebrodeur/type-safe-mapping": "^0.1.1",
+    "google-auth-library": "^8.0.0",
+    "googleapis": "^121.0.0",
+    "node-cache": "^5.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/node-cache": "^4.2.5",
+    "@typescript-eslint/eslint-plugin": "^5.0.0",
+    "@typescript-eslint/parser": "^5.0.0",
+    "eslint": "^8.0.0",
+    "ts-node": "^10.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  }
+}
