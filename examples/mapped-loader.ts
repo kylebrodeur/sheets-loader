@@ -9,7 +9,7 @@
  *   SA_EMAIL=<email> SA_KEY=<key> SHEET_ID=<id> npx ts-node examples/mapped-loader.ts
  */
 
-import { SheetsLoader, MappedSheetsLoader } from '@kylebrodeur/sheets-loader';
+import { SheetsLoader, MappedSheetsLoader } from '../src';
 import type { MappingDefinition } from '@kylebrodeur/type-safe-mapping';
 
 // ── 1. Declare the shape that matches your sheet's column headers exactly ──────
@@ -19,6 +19,7 @@ type ProductSheetRow = {
   'Product Name': string;
   'Unit Price': string;
   'In Stock': string;
+  [key: string]: string; // required: mapping values must also be keyof TSource
 };
 
 // ── 2. Define the column → model field mapping ─────────────────────────────────
