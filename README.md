@@ -95,7 +95,7 @@ oAuth2Client.setCredentials(tokens);
 const loader = new SheetsLoader({ authClient: oAuth2Client });
 ```
 
-See [examples/oauth-flow.ts](examples/oauth-flow.ts) for a complete runnable example.
+See [docs/oauth.md](docs/oauth.md) for endpoint details and token persistence guidance.
 
 ## API
 
@@ -110,6 +110,15 @@ See [examples/oauth-flow.ts](examples/oauth-flow.ts) for a complete runnable exa
 ### `loader.load(sheetId, range): Promise<string[][]>`
 
 Fetches values for the given range. Results are cached for `cacheTTL` seconds.
+
+### `loader.loadWithHeaders(sheetId, range): Promise<Record<string, string>[]>`
+
+Like `load()`, but treats the first row as column headers and returns an array of objects keyed by those headers. Empty header cells are skipped.
+
+```ts
+const rows = await loader.loadWithHeaders('SPREADSHEET_ID', 'Sheet1!A1:C100');
+// rows[0] → { 'First Name': 'Alice', 'Email': 'alice@example.com', 'Age': '30' }
+```
 
 ### `loader.loadAndMap<T>(sheetId, range, mapper): Promise<T[]>`
 
@@ -151,8 +160,14 @@ try {
 import { SheetsLoader, MappedSheetsLoader } from '@kylebrodeur/sheets-loader';
 import type { MappingDefinition } from '@kylebrodeur/type-safe-mapping';
 
-// Match your sheet headers exactly
-type ProductRow = { 'Product ID': string; 'Product Name': string; 'Unit Price': string };
+// TSource must include an index signature because mapped field names
+// (e.g. 'id') must also satisfy keyof TSource at the type level.
+type ProductRow = {
+  'Product ID': string;
+  'Product Name': string;
+  'Unit Price': string;
+  [key: string]: string;
+};
 
 const mapping = {
   'Product ID':   'id',
@@ -177,6 +192,11 @@ See [`examples/mapped-loader.ts`](examples/mapped-loader.ts) for the full runnab
 See the [`examples/`](examples/) directory for runnable TypeScript scripts:
 
 - [`mapped-loader.ts`](examples/mapped-loader.ts) — type-safe column renaming with `MappedSheetsLoader`
+
+See the [`docs/`](docs/) directory for deeper guides:
+
+- [`docs/oauth.md`](docs/oauth.md) — OAuth2 authorization code flow and token management
+- [`docs/post-processing.md`](docs/post-processing.md) — transforming and validating loaded rows
 
 ## Testing
 
