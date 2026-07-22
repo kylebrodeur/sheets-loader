@@ -1,5 +1,8 @@
-import { MappedServiceBase } from '@kylebrodeur/type-safe-mapping';
-import type { MappingDefinition, MappedType } from '@kylebrodeur/type-safe-mapping';
+import { MappedServiceBase } from "@kylebrodeur/type-safe-mapping";
+import type {
+  MappingDefinition,
+  MappedType,
+} from "@kylebrodeur/type-safe-mapping";
 
 /**
  * Minimal interface that any Google Sheets source must satisfy.
@@ -7,7 +10,10 @@ import type { MappingDefinition, MappedType } from '@kylebrodeur/type-safe-mappi
  * circular module dependencies and makes the loader easily testable.
  */
 export interface SheetSource {
-  loadWithHeaders(sheetId: string, range: string): Promise<Record<string, string>[]>;
+  loadWithHeaders(
+    sheetId: string,
+    range: string,
+  ): Promise<Record<string, string>[]>;
 }
 
 /**
@@ -53,7 +59,10 @@ export abstract class MappedSheetsLoader<
    * Loads a range, treats the first row as column headers, and maps every
    * subsequent row to the internal model shape defined by `fieldMapping`.
    */
-  async loadMapped(sheetId: string, range: string): Promise<MappedType<TSource, TMapping>[]> {
+  async loadMapped(
+    sheetId: string,
+    range: string,
+  ): Promise<MappedType<TSource, TMapping>[]> {
     const rows = await this.source.loadWithHeaders(sheetId, range);
     return rows.map((row) => this.map(row as Partial<TSource>));
   }

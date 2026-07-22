@@ -1,6 +1,6 @@
 {
   "name": "@kylebrodeur/sheets-loader",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A TypeScript library for loading and caching data from Google Sheets with OAuth support",
   "keywords": [
     "google-sheets",

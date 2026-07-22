@@ -16,7 +16,7 @@ pnpm add @kylebrodeur/sheets-loader
 ## Quick Start
 
 ```ts
-import { SheetsLoader } from '@kylebrodeur/sheets-loader';
+import { SheetsLoader } from "@kylebrodeur/sheets-loader";
 
 // Service account (server-to-server)
 const loader = new SheetsLoader({
@@ -28,7 +28,7 @@ const loader = new SheetsLoader({
   },
 });
 
-const rows = await loader.load('YOUR_SPREADSHEET_ID', 'Sheet1!A1:B10');
+const rows = await loader.load("YOUR_SPREADSHEET_ID", "Sheet1!A1:B10");
 console.log(rows); // string[][]
 ```
 
@@ -53,7 +53,7 @@ You can also pass a path to a credentials JSON file:
 
 ```ts
 const loader = new SheetsLoader({
-  auth: { credentials: './service-account.json' },
+  auth: { credentials: "./service-account.json" },
 });
 ```
 
@@ -62,8 +62,8 @@ const loader = new SheetsLoader({
 For apps where users authorize access to their own sheets:
 
 ```ts
-import { OAuth2Client } from 'google-auth-library';
-import { SheetsLoader } from '@kylebrodeur/sheets-loader';
+import { OAuth2Client } from "google-auth-library";
+import { SheetsLoader } from "@kylebrodeur/sheets-loader";
 
 const oAuth2Client = new OAuth2Client(
   process.env.CLIENT_ID,
@@ -73,7 +73,7 @@ const oAuth2Client = new OAuth2Client(
 oAuth2Client.setCredentials({ refresh_token: process.env.REFRESH_TOKEN });
 
 const loader = new SheetsLoader({ authClient: oAuth2Client });
-const rows = await loader.load('SPREADSHEET_ID', 'Sheet1!A1:C100');
+const rows = await loader.load("SPREADSHEET_ID", "Sheet1!A1:C100");
 ```
 
 #### Full Authorization Code Flow
@@ -81,10 +81,10 @@ const rows = await loader.load('SPREADSHEET_ID', 'Sheet1!A1:C100');
 ```ts
 // 1. Generate a consent URL for the user
 const authUrl = oAuth2Client.generateAuthUrl({
-  access_type: 'offline',
-  scope: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+  access_type: "offline",
+  scope: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
 });
-console.log('Authorize this app:', authUrl);
+console.log("Authorize this app:", authUrl);
 
 // 2. Exchange the code the user pastes back
 const { tokens } = await oAuth2Client.getToken(code);
@@ -101,11 +101,11 @@ See [docs/oauth.md](docs/oauth.md) for endpoint details and token persistence gu
 
 ### `new SheetsLoader(config?)`
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `auth` | `AuthConfig` | Auth credentials or file path |
+| Option       | Type                  | Description                                          |
+| ------------ | --------------------- | ---------------------------------------------------- |
+| `auth`       | `AuthConfig`          | Auth credentials or file path                        |
 | `authClient` | `JWT \| OAuth2Client` | Pre-built auth client (takes precedence over `auth`) |
-| `cacheTTL` | `number` | Cache TTL in seconds (default: `300`) |
+| `cacheTTL`   | `number`              | Cache TTL in seconds (default: `300`)                |
 
 ### `loader.load(sheetId, range): Promise<string[][]>`
 
@@ -116,7 +116,7 @@ Fetches values for the given range. Results are cached for `cacheTTL` seconds.
 Like `load()`, but treats the first row as column headers and returns an array of objects keyed by those headers. Empty header cells are skipped.
 
 ```ts
-const rows = await loader.loadWithHeaders('SPREADSHEET_ID', 'Sheet1!A1:C100');
+const rows = await loader.loadWithHeaders("SPREADSHEET_ID", "Sheet1!A1:C100");
 // rows[0] → { 'First Name': 'Alice', 'Email': 'alice@example.com', 'Age': '30' }
 ```
 
@@ -128,11 +128,11 @@ Fetches values and maps each row through a mapper function:
 type Product = { id: string; name: string; price: number };
 
 const products = await loader.loadAndMap(
-  'SPREADSHEET_ID',
-  'Products!A2:C100',
+  "SPREADSHEET_ID",
+  "Products!A2:C100",
   (row): Product => ({
     id: row[0],
-    name: row[1] || 'Unknown',
+    name: row[1] || "Unknown",
     price: parseFloat(row[2]) || 0,
   }),
 );
@@ -141,14 +141,24 @@ const products = await loader.loadAndMap(
 ## Error Handling
 
 ```ts
-import { AuthError, SheetNotFoundError, FetchError } from '@kylebrodeur/sheets-loader';
+import {
+  AuthError,
+  SheetNotFoundError,
+  FetchError,
+} from "@kylebrodeur/sheets-loader";
 
 try {
   const rows = await loader.load(sheetId, range);
 } catch (err) {
-  if (err instanceof AuthError) { /* bad credentials */ }
-  if (err instanceof SheetNotFoundError) { /* sheet ID not found */ }
-  if (err instanceof FetchError) { /* network / API error */ }
+  if (err instanceof AuthError) {
+    /* bad credentials */
+  }
+  if (err instanceof SheetNotFoundError) {
+    /* sheet ID not found */
+  }
+  if (err instanceof FetchError) {
+    /* network / API error */
+  }
 }
 ```
 
@@ -157,32 +167,34 @@ try {
 `sheets-loader` ships with `MappedSheetsLoader`, which integrates [`@kylebrodeur/type-safe-mapping`](https://github.com/kylebrodeur/type-safe-mapping) to rename sheet column headers to your internal model fields with full TypeScript inference — no manual string indexing.
 
 ```ts
-import { SheetsLoader, MappedSheetsLoader } from '@kylebrodeur/sheets-loader';
-import type { MappingDefinition } from '@kylebrodeur/type-safe-mapping';
+import { SheetsLoader, MappedSheetsLoader } from "@kylebrodeur/sheets-loader";
+import type { MappingDefinition } from "@kylebrodeur/type-safe-mapping";
 
 // TSource must include an index signature because mapped field names
 // (e.g. 'id') must also satisfy keyof TSource at the type level.
 type ProductRow = {
-  'Product ID': string;
-  'Product Name': string;
-  'Unit Price': string;
+  "Product ID": string;
+  "Product Name": string;
+  "Unit Price": string;
   [key: string]: string;
 };
 
 const mapping = {
-  'Product ID':   'id',
-  'Product Name': 'name',
-  'Unit Price':   'unitPrice',
+  "Product ID": "id",
+  "Product Name": "name",
+  "Unit Price": "unitPrice",
 } as const satisfies MappingDefinition<ProductRow>;
 
 class ProductLoader extends MappedSheetsLoader<ProductRow, typeof mapping> {
   protected fieldMapping = mapping;
 }
 
-const loader = new ProductLoader(new SheetsLoader({ auth: { credentials: './sa.json' } }));
+const loader = new ProductLoader(
+  new SheetsLoader({ auth: { credentials: "./sa.json" } }),
+);
 
 // products: { id: string; name: string; unitPrice: string }[]
-const products = await loader.loadMapped('SPREADSHEET_ID', 'Products!A1:C500');
+const products = await loader.loadMapped("SPREADSHEET_ID", "Products!A1:C500");
 ```
 
 See [`examples/mapped-loader.ts`](examples/mapped-loader.ts) for the full runnable example.
@@ -204,7 +216,7 @@ See the [`docs/`](docs/) directory for deeper guides:
 pnpm test
 ```
 
-Unit tests mock `getAuthClient` and `fetchValues` to avoid real network calls. Coverage includes caching behavior, retry logic, and all error types.
+Unit tests mock `getAuthClient`, `fetchValues`, and the generated Sheets API `values.get` resource to avoid real network calls. Coverage includes caching behavior, retry logic, generated resource receiver binding, and all error types.
 
 ## License
 

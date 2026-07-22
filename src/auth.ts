@@ -1,5 +1,5 @@
-import fs from 'fs/promises';
-import { GoogleAuth, JWT, OAuth2Client } from 'google-auth-library';
+import fs from "fs/promises";
+import { GoogleAuth, JWT, OAuth2Client } from "google-auth-library";
 
 export type AuthConfig = {
   /**
@@ -11,18 +11,23 @@ export type AuthConfig = {
   scopes?: string[];
 };
 
-export async function getAuthClient(config?: AuthConfig): Promise<JWT | OAuth2Client> {
-  const scopes = config?.scopes ?? ['https://www.googleapis.com/auth/spreadsheets.readonly'];
+export async function getAuthClient(
+  config?: AuthConfig,
+): Promise<JWT | OAuth2Client> {
+  const scopes = config?.scopes ?? [
+    "https://www.googleapis.com/auth/spreadsheets.readonly",
+  ];
 
   let creds: unknown = config?.credentials;
-  if (typeof creds === 'string') {
-    const raw = await fs.readFile(creds, { encoding: 'utf8' });
+  if (typeof creds === "string") {
+    const raw = await fs.readFile(creds, { encoding: "utf8" });
     creds = JSON.parse(raw);
   }
 
   try {
     // service account (JWT)
-    const sa = creds as { client_email?: string; private_key?: string } | undefined;
+    const sa = creds as
+      { client_email?: string; private_key?: string } | undefined;
     if (sa && sa.client_email && sa.private_key) {
       const jwt = new JWT({
         email: sa.client_email,
@@ -60,6 +65,6 @@ export async function getAuthClient(config?: AuthConfig): Promise<JWT | OAuth2Cl
     });
     return (await ga.getClient()) as JWT | OAuth2Client;
   } catch (err: unknown) {
-    throw new Error('Failed to create auth client', { cause: err });
+    throw new Error("Failed to create auth client", { cause: err });
   }
 }

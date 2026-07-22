@@ -1,6 +1,6 @@
-import { google } from 'googleapis';
-import type { JWT, OAuth2Client } from 'google-auth-library';
-import { SheetNotFoundError, FetchError } from './errors.js';
+import { google } from "googleapis";
+import type { JWT, OAuth2Client } from "google-auth-library";
+import { SheetNotFoundError, FetchError } from "./errors.js";
 
 type AuthClient = JWT | OAuth2Client | string | null | undefined;
 
@@ -12,7 +12,7 @@ export async function fetchValues(
 ): Promise<string[][]> {
   const maxRetries = options?.retries ?? 3;
   const client = google.sheets({
-    version: 'v4',
+    version: "v4",
     auth: authClient as unknown as JWT | OAuth2Client,
   });
 
@@ -20,14 +20,10 @@ export async function fetchValues(
   let lastErr: unknown;
   while (attempt < maxRetries) {
     try {
-      const getFn = client.spreadsheets.values.get as unknown as (params: {
-        spreadsheetId: string;
-        range: string;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      }) => Promise<any>;
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const res: any = await getFn({ spreadsheetId: sheetId, range });
+      const res = await client.spreadsheets.values.get({
+        spreadsheetId: sheetId,
+        range,
+      });
 
       if (!res || !res.data) return [];
       return (res.data.values as string[][]) || [];
@@ -42,5 +38,5 @@ export async function fetchValues(
     }
   }
 
-  throw new FetchError(String(lastErr ?? 'unknown'));
+  throw new FetchError(String(lastErr ?? "unknown"));
 }

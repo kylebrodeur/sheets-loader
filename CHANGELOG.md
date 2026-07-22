@@ -5,9 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-07-21
+
+### Fixed
+
+- Preserve the generated Google Sheets `values.get` resource receiver when fetching values, avoiding Google API context errors.
+
 ## [0.1.0] - 2026-03-08
 
 ### Added
+
 - Initial release
 - `SheetsLoader` class for loading rows from Google Sheets via the Sheets API v4
 - `loadWithHeaders()` for returning rows keyed by the first-row header values
@@ -19,4 +26,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive error hierarchy (`SheetsLoaderError`, `AuthError`, `FetchError`, `ParseError`)
 - Full TypeScript strict-mode types and exported type declarations
 
+[0.1.1]: https://github.com/kylebrodeur/sheets-loader/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/kylebrodeur/sheets-loader/releases/tag/v0.1.0

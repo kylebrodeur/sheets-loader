@@ -1,8 +1,8 @@
-import { getAuthClient, AuthConfig } from './auth.js';
-import type { JWT, OAuth2Client } from 'google-auth-library';
-import { fetchValues } from './fetcher.js';
-import { SimpleCache, makeCacheKey } from './cache.js';
-import { AuthError, FetchError, SheetNotFoundError } from './errors.js';
+import { getAuthClient, AuthConfig } from "./auth.js";
+import type { JWT, OAuth2Client } from "google-auth-library";
+import { fetchValues } from "./fetcher.js";
+import { SimpleCache, makeCacheKey } from "./cache.js";
+import { AuthError, FetchError, SheetNotFoundError } from "./errors.js";
 
 export type SheetsLoaderConfig = {
   auth?: AuthConfig;
@@ -59,7 +59,11 @@ export class SheetsLoader {
     }
   }
 
-  async loadAndMap<T>(sheetId: string, range: string, mapper: (row: string[]) => T): Promise<T[]> {
+  async loadAndMap<T>(
+    sheetId: string,
+    range: string,
+    mapper: (row: string[]) => T,
+  ): Promise<T[]> {
     const rows = await this.load(sheetId, range);
     return rows.map(mapper);
   }
@@ -75,22 +79,25 @@ export class SheetsLoader {
    * const rows = await loader.loadWithHeaders('SHEET_ID', 'Sheet1!A1:C100');
    * // rows[0] → { 'First Name': 'Alice', 'Email': 'alice@example.com', 'Age': '30' }
    */
-  async loadWithHeaders(sheetId: string, range: string): Promise<Record<string, string>[]> {
+  async loadWithHeaders(
+    sheetId: string,
+    range: string,
+  ): Promise<Record<string, string>[]> {
     const [headerRow, ...dataRows] = await this.load(sheetId, range);
     if (!headerRow) return [];
     return dataRows.map((row) => {
       const record: Record<string, string> = {};
       headerRow.forEach((header, i) => {
-        if (header) record[header] = row[i] ?? '';
+        if (header) record[header] = row[i] ?? "";
       });
       return record;
     });
   }
 }
 
-export { getAuthClient } from './auth.js';
-export { fetchValues } from './fetcher.js';
-export { SimpleCache } from './cache.js';
-export { AuthError, SheetNotFoundError, FetchError } from './errors.js';
-export { MappedSheetsLoader } from './MappedSheetsLoader.js';
-export type { SheetSource } from './MappedSheetsLoader.js';
+export { getAuthClient } from "./auth.js";
+export { fetchValues } from "./fetcher.js";
+export { SimpleCache } from "./cache.js";
+export { AuthError, SheetNotFoundError, FetchError } from "./errors.js";
+export { MappedSheetsLoader } from "./MappedSheetsLoader.js";
+export type { SheetSource } from "./MappedSheetsLoader.js";

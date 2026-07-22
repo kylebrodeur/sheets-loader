@@ -1,4 +1,4 @@
-import NodeCache from 'node-cache';
+import NodeCache from "node-cache";
 
 export class SimpleCache {
   private cache: NodeCache;
