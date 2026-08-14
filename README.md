@@ -199,6 +199,54 @@ const products = await loader.loadMapped("SPREADSHEET_ID", "Products!A1:C500");
 
 See [`examples/mapped-loader.ts`](examples/mapped-loader.ts) for the full runnable example.
 
+## Rename/Reorder-Proof Columns (Metadata Tagging)
+
+`MappedSheetsLoader` (above) renames columns by matching literal header text — fragile if someone
+renames or reorders a column in the sheet. `MetadataTaggedSheetsClient` resolves columns by a
+Google Sheets column-level [developer metadata](https://developers.google.com/sheets/api/guides/metadata)
+tag first, falling back to header-name matching only when no tag exists yet — and self-heals by
+tagging any header-resolved or brand-new column going forward. It also supports writing: append
+rows with dedupe, and update specific cells in an already-matched row.
+
+```ts
+import { MetadataTaggedSheetsClient } from "@kylebrodeur/sheets-loader";
+
+const client = new MetadataTaggedSheetsClient({
+  auth: { credentials: "./sa.json" },
+  tagPrefix: "myapp:", // your own namespace, so unrelated tools don't collide
+  columns: [
+    { key: "cohortId", header: "Stripe ID" },
+    { key: "intellumPathId", header: "Intellum Path ID" },
+  ],
+});
+
+// Read — satisfies SheetSource, so it plugs directly into MappedSheetsLoader
+// for typed field mapping on top, if you want it.
+const rows = await client.loadWithHeaders("SPREADSHEET_ID", "CohortIndex!A1:Z100");
+// rows: [{ cohortId: "aiAcceleratorMar2026", intellumPathId: "path-123" }, ...]
+
+// Write — append new rows, skipping ones that match on the given key(s).
+await client.appendDedup({
+  spreadsheetId: "SPREADSHEET_ID",
+  sheetName: "CohortIndex",
+  dedupeColumns: ["cohortId"],
+  rows: [{ cohortId: "aiAcceleratorMay2026", intellumPathId: "path-456" }],
+});
+
+// Write — update specific cells in the row matching a column's value.
+await client.updateRow(
+  "SPREADSHEET_ID",
+  "CohortIndex",
+  "cohortId",
+  "aiAcceleratorMar2026",
+  { intellumPathId: "path-123-updated" },
+);
+```
+
+If you already have a `sheets_v4.Sheets` client (e.g. shared across services, or in tests), use the
+lower-level `createMetadataTaggedSheetsClient(sheets, config)` function instead of the class — same
+API, no auth handling.
+
 ## Examples
 
 See the [`examples/`](examples/) directory for runnable TypeScript scripts:

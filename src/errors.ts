@@ -27,3 +27,11 @@ export class FetchError extends Error {
     this.name = "FetchError";
   }
 }
+
+/** Thrown for caller misconfiguration (e.g. an unknown dedupe/match column key). */
+export class SheetConfigError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options as unknown as ErrorOptions);
+    this.name = "SheetConfigError";
+  }
+}

@@ -98,6 +98,23 @@ export class SheetsLoader {
 export { getAuthClient } from "./auth.js";
 export { fetchValues } from "./fetcher.js";
 export { SimpleCache } from "./cache.js";
-export { AuthError, SheetNotFoundError, FetchError } from "./errors.js";
+export {
+  AuthError,
+  SheetNotFoundError,
+  FetchError,
+  SheetConfigError,
+} from "./errors.js";
 export { MappedSheetsLoader } from "./MappedSheetsLoader.js";
 export type { SheetSource } from "./MappedSheetsLoader.js";
+export {
+  MetadataTaggedSheetsClient,
+  createMetadataTaggedSheetsClient,
+} from "./MetadataTaggedSheetsClient.js";
+export type {
+  SheetColumnDefinition,
+  MetadataTaggedSheetsClientConfig,
+  MetadataTaggedSheetsClientConfigWithAuth,
+  SheetsAppendDedupInput,
+  AppendDedupResult,
+  UpdateRowResult,
+} from "./MetadataTaggedSheetsClient.js";
