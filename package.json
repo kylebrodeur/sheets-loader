@@ -50,6 +50,7 @@
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "demo": "tsx examples/demo.ts",
+    "prepare": "tsc -p tsconfig.json",
     "prepublishOnly": "pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
