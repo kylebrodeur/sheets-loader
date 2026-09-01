@@ -285,8 +285,7 @@ describe("createMetadataTaggedSheetsClient", () => {
       const result = await client.updateRow(
         "SHEET_ID",
         "CohortIndex",
-        "cohortId",
-        "c2",
+        { cohortId: "c2" },
         {
           intellumPathId: "p2-fulfilled",
         },
@@ -317,8 +316,7 @@ describe("createMetadataTaggedSheetsClient", () => {
       const result = await client.updateRow(
         "SHEET_ID",
         "CohortIndex",
-        "cohortId",
-        "no-such-cohort",
+        { cohortId: "no-such-cohort" },
         {
           intellumPathId: "x",
         },
@@ -336,10 +334,56 @@ describe("createMetadataTaggedSheetsClient", () => {
       });
 
       await expect(
-        client.updateRow("SHEET_ID", "CohortIndex", "cohortId", "c1", {
+        client.updateRow("SHEET_ID", "CohortIndex", { cohortId: "c1" }, {
           notAColumn: "x",
         }),
       ).rejects.toThrow(SheetConfigError);
+    });
+
+    it("throws SheetConfigError for an empty match object", async () => {
+      const sheets = fakeSheets({ headers: ["Stripe ID"], rows: [["c1"]] });
+      const client = createMetadataTaggedSheetsClient(sheets, {
+        columns: COLUMNS,
+        tagPrefix: TAG_PREFIX,
+      });
+
+      await expect(
+        client.updateRow("SHEET_ID", "CohortIndex", {}, { intellumPathId: "x" }),
+      ).rejects.toThrow(SheetConfigError);
+    });
+
+    it("compound match requires ALL columns to match - a partial match on one column is not enough", async () => {
+      const sheets = fakeSheets({
+        headers: ["Stripe ID", "Intellum Path ID"],
+        rows: [
+          // Same "Stripe ID" (shared order id), different "Intellum Path ID"
+          // (standing in for a second, more selective column) - mirrors two
+          // roster rows from one order (purchaser + a placeholder seat)
+          // sharing an order id but not an email.
+          ["order-1", "placeholder-label"],
+          ["order-1", "real@example.com"],
+        ],
+      });
+      const client = createMetadataTaggedSheetsClient(sheets, {
+        columns: COLUMNS,
+        tagPrefix: TAG_PREFIX,
+      });
+
+      const result = await client.updateRow(
+        "SHEET_ID",
+        "CohortIndex",
+        { cohortId: "order-1", intellumPathId: "real@example.com" },
+        { intellumPathId: "matched-the-second-row" },
+      );
+
+      expect(result).toEqual({ updated: true });
+      expect(sheets.spreadsheets.values.batchUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          // Row 1 is the header; "order-1"/"real@example.com" is the SECOND
+          // data row -> sheet row 3, not row 2 (which shares "order-1" alone).
+          requestBody: { valueInputOption: "RAW", data: [{ range: "'CohortIndex'!B3", values: [["matched-the-second-row"]] }] },
+        }),
+      );
     });
 
     it("matches despite trailing whitespace/newline artifacts in the stored cell", async () => {
@@ -355,8 +399,7 @@ describe("createMetadataTaggedSheetsClient", () => {
       const result = await client.updateRow(
         "SHEET_ID",
         "CohortIndex",
-        "cohortId",
-        "c1@example.com",
+        { cohortId: "c1@example.com" },
         { intellumPathId: "fulfilled" },
       );
 
@@ -376,8 +419,7 @@ describe("createMetadataTaggedSheetsClient", () => {
       const result = await client.updateRow(
         "SHEET_ID",
         "CohortIndex",
-        "cohortId",
-        "person@example.com",
+        { cohortId: "person@example.com" },
         { intellumPathId: "fulfilled" },
       );
 

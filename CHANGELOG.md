@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-09-01
+
+### Changed
+
+- **Breaking:** `updateRow`'s signature changed from `(spreadsheetId, sheetName, matchKey,
+  matchValue, updates)` to `(spreadsheetId, sheetName, match, updates)`, where `match` is a
+  `Record<string, string>` of one or more column keys to values, ALL of which must match
+  (AND semantics) for a row to be updated. A single-column match is just a one-entry object.
+  This exists because a single match column can be ambiguous - e.g. several rows sharing one
+  order id - where a second, more selective column (present on only the intended row) removes
+  the ambiguity without depending on physical row order. Throws `SheetConfigError` for an
+  empty `match` object.
+
 ## [0.2.1] - 2026-08-31
 
 ### Fixed

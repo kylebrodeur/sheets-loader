@@ -319,8 +319,7 @@ export function createMetadataTaggedSheetsClient(
   updateRow(
     spreadsheetId: string,
     sheetName: string,
-    matchKey: string,
-    matchValue: string,
+    match: Record<string, string>,
     updates: Record<string, string>,
   ): Promise<UpdateRowResult>;
 } {
@@ -461,11 +460,16 @@ export function createMetadataTaggedSheetsClient(
     async updateRow(
       spreadsheetId: string,
       sheetName: string,
-      matchKey: string,
-      matchValue: string,
+      match: Record<string, string>,
       updates: Record<string, string>,
     ): Promise<UpdateRowResult> {
-      requireColumn(matchKey);
+      const matchKeys = Object.keys(match);
+      if (matchKeys.length === 0) {
+        throw new SheetConfigError(
+          "updateRow requires at least one match column.",
+        );
+      }
+      for (const key of matchKeys) requireColumn(key);
       for (const key of Object.keys(updates)) requireColumn(key);
 
       const {
@@ -481,18 +485,26 @@ export function createMetadataTaggedSheetsClient(
         tagPrefix,
       );
 
-      const matchCol = resolvedColumns.find((c) => c.key === matchKey);
-      if (!matchCol) {
-        throw new SheetConfigError(
-          `Match column "${matchKey}" could not be resolved for sheet "${sheetName}".`,
-        );
-      }
+      // Every match column must equal (AND semantics) - a single-column match
+      // is just this with one entry. Compound matches exist because some
+      // columns (e.g. a shared order id) are ambiguous alone: several rows
+      // from the same order can share it, so a second, more selective column
+      // narrows to the exact intended row regardless of physical row order.
+      const matchCols = matchKeys.map((key) => {
+        const col = resolvedColumns.find((c) => c.key === key);
+        if (!col) {
+          throw new SheetConfigError(
+            `Match column "${key}" could not be resolved for sheet "${sheetName}".`,
+          );
+        }
+        return { physicalIndex: col.physicalIndex, value: normalizeForMatch(match[key]!) };
+      });
 
-      const normalizedMatchValue = normalizeForMatch(matchValue);
-      const rowIndex = dataRowsByPhysicalIndex.findIndex(
-        (row) =>
-          normalizeForMatch(row.get(matchCol.physicalIndex) ?? "") ===
-          normalizedMatchValue,
+      const rowIndex = dataRowsByPhysicalIndex.findIndex((row) =>
+        matchCols.every(
+          ({ physicalIndex, value }) =>
+            normalizeForMatch(row.get(physicalIndex) ?? "") === value,
+        ),
       );
       if (rowIndex === -1) {
         return { updated: false };
@@ -589,17 +601,10 @@ export class MetadataTaggedSheetsClient {
   async updateRow(
     spreadsheetId: string,
     sheetName: string,
-    matchKey: string,
-    matchValue: string,
+    match: Record<string, string>,
     updates: Record<string, string>,
   ) {
     const delegate = await this.getDelegate();
-    return delegate.updateRow(
-      spreadsheetId,
-      sheetName,
-      matchKey,
-      matchValue,
-      updates,
-    );
+    return delegate.updateRow(spreadsheetId, sheetName, match, updates);
   }
 }
