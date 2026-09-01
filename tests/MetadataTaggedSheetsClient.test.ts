@@ -341,5 +341,69 @@ describe("createMetadataTaggedSheetsClient", () => {
         }),
       ).rejects.toThrow(SheetConfigError);
     });
+
+    it("matches despite trailing whitespace/newline artifacts in the stored cell", async () => {
+      const sheets = fakeSheets({
+        headers: ["Stripe ID", "Intellum Path ID"],
+        rows: [["c1@example.com\r", "p1"]],
+      });
+      const client = createMetadataTaggedSheetsClient(sheets, {
+        columns: COLUMNS,
+        tagPrefix: TAG_PREFIX,
+      });
+
+      const result = await client.updateRow(
+        "SHEET_ID",
+        "CohortIndex",
+        "cohortId",
+        "c1@example.com",
+        { intellumPathId: "fulfilled" },
+      );
+
+      expect(result).toEqual({ updated: true });
+    });
+
+    it("matches despite a casing difference between the stored cell and the match value", async () => {
+      const sheets = fakeSheets({
+        headers: ["Stripe ID", "Intellum Path ID"],
+        rows: [["Person@Example.com", "p1"]],
+      });
+      const client = createMetadataTaggedSheetsClient(sheets, {
+        columns: COLUMNS,
+        tagPrefix: TAG_PREFIX,
+      });
+
+      const result = await client.updateRow(
+        "SHEET_ID",
+        "CohortIndex",
+        "cohortId",
+        "person@example.com",
+        { intellumPathId: "fulfilled" },
+      );
+
+      expect(result).toEqual({ updated: true });
+    });
+  });
+
+  describe("appendDedup whitespace/casing tolerance", () => {
+    it("treats a dedupe key as a duplicate despite trailing whitespace or casing differences", async () => {
+      const sheets = fakeSheets({
+        headers: ["Stripe ID", "Intellum Path ID"],
+        rows: [["Person@Example.com ", "p1"]],
+      });
+      const client = createMetadataTaggedSheetsClient(sheets, {
+        columns: COLUMNS,
+        tagPrefix: TAG_PREFIX,
+      });
+
+      const result = await client.appendDedup({
+        spreadsheetId: "SHEET_ID",
+        sheetName: "CohortIndex",
+        dedupeColumns: ["cohortId"],
+        rows: [{ cohortId: "person@example.com\r", intellumPathId: "p1" }],
+      });
+
+      expect(result).toEqual({ appended: 0, skipped: 1 });
+    });
   });
 });

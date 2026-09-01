@@ -69,6 +69,16 @@ function headerRange(sheetName: string, physicalIndex: number): string {
   return `${quotedSheetName(sheetName)}!${columnToA1(physicalIndex)}1`;
 }
 
+/**
+ * Normalizes a cell value for equality comparisons only (matching/dedupe) -
+ * never applied to a value actually written to a cell. Google Sheets rows
+ * routinely carry copy-paste artifacts (trailing `\r`, stray whitespace,
+ * inconsistent casing on emails) that must not defeat a match.
+ */
+function normalizeForMatch(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 const GRID_FIELDS =
   "sheets.properties(title,sheetId),sheets.data(startColumn,rowData(values(formattedValue)),columnMetadata(developerMetadata(metadataKey)))";
 
@@ -391,7 +401,9 @@ export function createMetadataTaggedSheetsClient(
       const seenKeys = new Set<string>();
       for (const row of dataRowsByPhysicalIndex) {
         seenKeys.add(
-          JSON.stringify(dedupeIndexes.map((idx) => row.get(idx) ?? "")),
+          JSON.stringify(
+            dedupeIndexes.map((idx) => normalizeForMatch(row.get(idx) ?? "")),
+          ),
         );
       }
 
@@ -399,7 +411,7 @@ export function createMetadataTaggedSheetsClient(
       let skipped = 0;
       for (const row of input.rows) {
         const key = JSON.stringify(
-          input.dedupeColumns.map((k) => row[k] ?? ""),
+          input.dedupeColumns.map((k) => normalizeForMatch(row[k] ?? "")),
         );
         if (seenKeys.has(key)) {
           skipped++;
@@ -476,8 +488,11 @@ export function createMetadataTaggedSheetsClient(
         );
       }
 
+      const normalizedMatchValue = normalizeForMatch(matchValue);
       const rowIndex = dataRowsByPhysicalIndex.findIndex(
-        (row) => (row.get(matchCol.physicalIndex) ?? "") === matchValue,
+        (row) =>
+          normalizeForMatch(row.get(matchCol.physicalIndex) ?? "") ===
+          normalizedMatchValue,
       );
       if (rowIndex === -1) {
         return { updated: false };
