@@ -7,18 +7,24 @@ import {
 import { SheetConfigError, SheetNotFoundError } from "../src/errors";
 
 const COLUMNS: readonly SheetColumnDefinition[] = [
-  { key: "cohortId", header: "Stripe ID" },
-  { key: "intellumPathId", header: "Intellum Path ID" },
+  { key: "cohortId" },
+  { key: "intellumPathId" },
 ];
 
 const TAG_PREFIX = "uofd:";
 
+const ALL_TAGGED = {
+  0: [`${TAG_PREFIX}cohortId`],
+  1: [`${TAG_PREFIX}intellumPathId`],
+} as const;
+
 interface GridFixture {
   sheetId?: number;
   title?: string;
+  /** Display labels in row 1; never used for column resolution. */
   headers?: (string | undefined)[];
   /** developerMetadata keys per physical column index, e.g. { 0: "uofd:cohortId" }. */
-  metadataByColumn?: Record<number, string[]>;
+  metadataByColumn?: Record<number, readonly string[]>;
   rows?: string[][];
 }
 
@@ -31,7 +37,14 @@ function fakeSheets(fixture: GridFixture): sheets_v4.Sheets {
     rows = [],
   } = fixture;
 
-  const columnMetadata = headers.map((_, i) => ({
+  // columnMetadata can reach beyond the header row: a sheet pre-tagged by an
+  // operator may carry metadata on columns with no cell values at all.
+  const metadataWidth = Math.max(
+    headers.length,
+    ...Object.keys(metadataByColumn).map((i) => Number(i) + 1),
+    0,
+  );
+  const columnMetadata = Array.from({ length: metadataWidth }, (_, i) => ({
     developerMetadata: (metadataByColumn[i] ?? []).map((metadataKey) => ({
       metadataKey,
     })),
@@ -68,9 +81,9 @@ function fakeSheets(fixture: GridFixture): sheets_v4.Sheets {
 
 describe("createMetadataTaggedSheetsClient", () => {
   describe("loadWithHeaders", () => {
-    it("resolves columns by metadata tag first", async () => {
-      // Headers are reordered/renamed vs. the configured display header, but
-      // metadata tags still identify the logical column correctly.
+    it("resolves columns by metadata tag only, regardless of header names or order", async () => {
+      // Headers are reordered/renamed vs. any display label, but metadata
+      // tags still identify the logical column correctly.
       const sheets = fakeSheets({
         headers: ["Renamed Path Column", "Renamed Cohort Column"],
         metadataByColumn: {
@@ -95,7 +108,7 @@ describe("createMetadataTaggedSheetsClient", () => {
       ]);
     });
 
-    it("falls back to configured header when no metadata tag exists", async () => {
+    it("throws SheetConfigError naming every missing metadata key, even when headers match exactly", async () => {
       const sheets = fakeSheets({
         headers: ["Stripe ID", "Intellum Path ID"],
         rows: [["aiAcceleratorMar2026", "path-123"]],
@@ -106,19 +119,73 @@ describe("createMetadataTaggedSheetsClient", () => {
         tagPrefix: TAG_PREFIX,
       });
 
-      const rows = await client.loadWithHeaders(
-        "SHEET_ID",
-        "CohortIndex!A1:Z100",
-      );
+      const error = await client
+        .loadWithHeaders("SHEET_ID", "CohortIndex!A1:Z100")
+        .then(
+          () => {
+            throw new Error("expected loadWithHeaders to reject");
+          },
+          (err: unknown) => err,
+        );
 
-      expect(rows).toEqual([
-        { cohortId: "aiAcceleratorMar2026", intellumPathId: "path-123" },
-      ]);
+      expect(error).toBeInstanceOf(SheetConfigError);
+      const message = (error as Error).message;
+      expect(message).toContain(`${TAG_PREFIX}cohortId`);
+      expect(message).toContain(`${TAG_PREFIX}intellumPathId`);
     });
 
-    it("defaults missing values to empty string", async () => {
+    it("names only the missing metadata keys when some columns are already tagged", async () => {
       const sheets = fakeSheets({
-        headers: ["Stripe ID"],
+        headers: ["Stripe ID", "Intellum Path ID"],
+        metadataByColumn: { 0: [`${TAG_PREFIX}cohortId`] },
+        rows: [["aiAcceleratorMar2026", "path-123"]],
+      });
+
+      const client = createMetadataTaggedSheetsClient(sheets, {
+        columns: COLUMNS,
+        tagPrefix: TAG_PREFIX,
+      });
+
+      const error = await client
+        .loadWithHeaders("SHEET_ID", "CohortIndex!A1:Z100")
+        .then(
+          () => {
+            throw new Error("expected loadWithHeaders to reject");
+          },
+          (err: unknown) => err,
+        );
+
+      expect(error).toBeInstanceOf(SheetConfigError);
+      const message = (error as Error).message;
+      expect(message).toContain(`${TAG_PREFIX}intellumPathId`);
+      expect(message).not.toContain(`${TAG_PREFIX}cohortId`);
+    });
+
+    it("never self-heals: a failed read performs no metadata or value writes", async () => {
+      const sheets = fakeSheets({
+        headers: ["Stripe ID", "Intellum Path ID"],
+        rows: [["aiAcceleratorMar2026", "path-123"]],
+      });
+
+      const client = createMetadataTaggedSheetsClient(sheets, {
+        columns: COLUMNS,
+        tagPrefix: TAG_PREFIX,
+      });
+
+      await expect(
+        client.loadWithHeaders("SHEET_ID", "CohortIndex!A1:Z100"),
+      ).rejects.toThrow(SheetConfigError);
+
+      expect(sheets.spreadsheets.batchUpdate).not.toHaveBeenCalled();
+      expect(sheets.spreadsheets.values.append).not.toHaveBeenCalled();
+      expect(sheets.spreadsheets.values.batchUpdate).not.toHaveBeenCalled();
+    });
+
+    it("defaults missing cell values to empty string for tagged columns", async () => {
+      const sheets = fakeSheets({
+        headers: ["Stripe ID", "Intellum Path ID"],
+        metadataByColumn: ALL_TAGGED,
+        // Row carries a value only for the first tagged column.
         rows: [["aiAcceleratorMar2026"]],
       });
 
@@ -154,10 +221,7 @@ describe("createMetadataTaggedSheetsClient", () => {
     it("appends new rows and skips ones matching the dedupe key", async () => {
       const sheets = fakeSheets({
         headers: ["Stripe ID", "Intellum Path ID"],
-        metadataByColumn: {
-          0: [`${TAG_PREFIX}cohortId`],
-          1: [`${TAG_PREFIX}intellumPathId`],
-        },
+        metadataByColumn: ALL_TAGGED,
         rows: [["existing-cohort", "path-1"]],
       });
 
@@ -184,7 +248,7 @@ describe("createMetadataTaggedSheetsClient", () => {
       );
     });
 
-    it("tags columns resolved only by header fallback", async () => {
+    it("throws SheetConfigError naming missing metadata keys and writes nothing when columns are untagged", async () => {
       const sheets = fakeSheets({
         headers: ["Stripe ID", "Intellum Path ID"],
         rows: [],
@@ -195,58 +259,61 @@ describe("createMetadataTaggedSheetsClient", () => {
         tagPrefix: TAG_PREFIX,
       });
 
-      await client.appendDedup({
-        spreadsheetId: "SHEET_ID",
-        sheetName: "CohortIndex",
-        dedupeColumns: ["cohortId"],
-        rows: [{ cohortId: "c1", intellumPathId: "p1" }],
-      });
-
-      expect(sheets.spreadsheets.batchUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          requestBody: {
-            requests: expect.arrayContaining([
-              expect.objectContaining({
-                createDeveloperMetadata: expect.objectContaining({
-                  developerMetadata: expect.objectContaining({
-                    metadataKey: `${TAG_PREFIX}cohortId`,
-                  }),
-                }),
-              }),
-            ]),
+      const error = await client
+        .appendDedup({
+          spreadsheetId: "SHEET_ID",
+          sheetName: "CohortIndex",
+          dedupeColumns: ["cohortId"],
+          rows: [{ cohortId: "c1", intellumPathId: "p1" }],
+        })
+        .then(
+          () => {
+            throw new Error("expected appendDedup to reject");
           },
-        }),
+          (err: unknown) => err,
+        );
+
+      expect(error).toBeInstanceOf(SheetConfigError);
+      expect((error as Error).message).toContain(`${TAG_PREFIX}cohortId`);
+      expect((error as Error).message).toContain(
+        `${TAG_PREFIX}intellumPathId`,
       );
+      // No auto-tag or migration write: the sheet is left exactly as found.
+      expect(sheets.spreadsheets.batchUpdate).not.toHaveBeenCalled();
+      expect(sheets.spreadsheets.values.append).not.toHaveBeenCalled();
+      expect(sheets.spreadsheets.values.batchUpdate).not.toHaveBeenCalled();
     });
 
-    it("writes canonical headers first when appending to a fully empty sheet", async () => {
-      const sheets = fakeSheets({ headers: [], rows: [] });
+    it("appends data rows only to an empty sheet that is already pre-tagged", async () => {
+      // No header row and no values, but the operator already tagged both
+      // columns - the client writes exactly the data rows, nothing else.
+      const sheets = fakeSheets({ headers: [], metadataByColumn: ALL_TAGGED, rows: [] });
       const client = createMetadataTaggedSheetsClient(sheets, {
         columns: COLUMNS,
         tagPrefix: TAG_PREFIX,
       });
 
-      await client.appendDedup({
+      const result = await client.appendDedup({
         spreadsheetId: "SHEET_ID",
         sheetName: "CohortIndex",
         dedupeColumns: ["cohortId"],
         rows: [{ cohortId: "c1", intellumPathId: "p1" }],
       });
 
+      expect(result).toEqual({ appended: 1, skipped: 0 });
       expect(sheets.spreadsheets.values.append).toHaveBeenCalledWith(
         expect.objectContaining({
-          requestBody: {
-            values: [
-              ["Stripe ID", "Intellum Path ID"],
-              ["c1", "p1"],
-            ],
-          },
+          requestBody: { values: [["c1", "p1"]] },
         }),
       );
     });
 
     it("throws SheetConfigError for an unknown dedupe column", async () => {
-      const sheets = fakeSheets({ headers: ["Stripe ID"], rows: [] });
+      const sheets = fakeSheets({
+        headers: ["Stripe ID", "Intellum Path ID"],
+        metadataByColumn: ALL_TAGGED,
+        rows: [],
+      });
       const client = createMetadataTaggedSheetsClient(sheets, {
         columns: COLUMNS,
         tagPrefix: TAG_PREFIX,
@@ -267,10 +334,7 @@ describe("createMetadataTaggedSheetsClient", () => {
     it("updates the matched row's cells and leaves others untouched", async () => {
       const sheets = fakeSheets({
         headers: ["Stripe ID", "Intellum Path ID"],
-        metadataByColumn: {
-          0: [`${TAG_PREFIX}cohortId`],
-          1: [`${TAG_PREFIX}intellumPathId`],
-        },
+        metadataByColumn: ALL_TAGGED,
         rows: [
           ["c1", "p1"],
           ["c2", "p2"],
@@ -303,9 +367,44 @@ describe("createMetadataTaggedSheetsClient", () => {
       );
     });
 
+    it("throws SheetConfigError naming missing metadata keys and writes nothing when columns are untagged", async () => {
+      const sheets = fakeSheets({
+        headers: ["Stripe ID", "Intellum Path ID"],
+        rows: [["c1", "p1"]],
+      });
+
+      const client = createMetadataTaggedSheetsClient(sheets, {
+        columns: COLUMNS,
+        tagPrefix: TAG_PREFIX,
+      });
+
+      const error = await client
+        .updateRow(
+          "SHEET_ID",
+          "CohortIndex",
+          { cohortId: "c1" },
+          { intellumPathId: "p1-fulfilled" },
+        )
+        .then(
+          () => {
+            throw new Error("expected updateRow to reject");
+          },
+          (err: unknown) => err,
+        );
+
+      expect(error).toBeInstanceOf(SheetConfigError);
+      expect((error as Error).message).toContain(`${TAG_PREFIX}cohortId`);
+      expect((error as Error).message).toContain(
+        `${TAG_PREFIX}intellumPathId`,
+      );
+      expect(sheets.spreadsheets.values.batchUpdate).not.toHaveBeenCalled();
+      expect(sheets.spreadsheets.batchUpdate).not.toHaveBeenCalled();
+    });
+
     it("returns updated: false when no row matches", async () => {
       const sheets = fakeSheets({
         headers: ["Stripe ID", "Intellum Path ID"],
+        metadataByColumn: ALL_TAGGED,
         rows: [["c1", "p1"]],
       });
       const client = createMetadataTaggedSheetsClient(sheets, {
@@ -327,7 +426,11 @@ describe("createMetadataTaggedSheetsClient", () => {
     });
 
     it("throws SheetConfigError for an unknown update column", async () => {
-      const sheets = fakeSheets({ headers: ["Stripe ID"], rows: [["c1"]] });
+      const sheets = fakeSheets({
+        headers: ["Stripe ID", "Intellum Path ID"],
+        metadataByColumn: ALL_TAGGED,
+        rows: [["c1", "p1"]],
+      });
       const client = createMetadataTaggedSheetsClient(sheets, {
         columns: COLUMNS,
         tagPrefix: TAG_PREFIX,
@@ -341,7 +444,11 @@ describe("createMetadataTaggedSheetsClient", () => {
     });
 
     it("throws SheetConfigError for an empty match object", async () => {
-      const sheets = fakeSheets({ headers: ["Stripe ID"], rows: [["c1"]] });
+      const sheets = fakeSheets({
+        headers: ["Stripe ID", "Intellum Path ID"],
+        metadataByColumn: ALL_TAGGED,
+        rows: [["c1", "p1"]],
+      });
       const client = createMetadataTaggedSheetsClient(sheets, {
         columns: COLUMNS,
         tagPrefix: TAG_PREFIX,
@@ -355,6 +462,7 @@ describe("createMetadataTaggedSheetsClient", () => {
     it("compound match requires ALL columns to match - a partial match on one column is not enough", async () => {
       const sheets = fakeSheets({
         headers: ["Stripe ID", "Intellum Path ID"],
+        metadataByColumn: ALL_TAGGED,
         rows: [
           // Same "Stripe ID" (shared order id), different "Intellum Path ID"
           // (standing in for a second, more selective column) - mirrors two
@@ -389,6 +497,7 @@ describe("createMetadataTaggedSheetsClient", () => {
     it("matches despite trailing whitespace/newline artifacts in the stored cell", async () => {
       const sheets = fakeSheets({
         headers: ["Stripe ID", "Intellum Path ID"],
+        metadataByColumn: ALL_TAGGED,
         rows: [["c1@example.com\r", "p1"]],
       });
       const client = createMetadataTaggedSheetsClient(sheets, {
@@ -409,6 +518,7 @@ describe("createMetadataTaggedSheetsClient", () => {
     it("matches despite a casing difference between the stored cell and the match value", async () => {
       const sheets = fakeSheets({
         headers: ["Stripe ID", "Intellum Path ID"],
+        metadataByColumn: ALL_TAGGED,
         rows: [["Person@Example.com", "p1"]],
       });
       const client = createMetadataTaggedSheetsClient(sheets, {
@@ -431,6 +541,7 @@ describe("createMetadataTaggedSheetsClient", () => {
     it("treats a dedupe key as a duplicate despite trailing whitespace or casing differences", async () => {
       const sheets = fakeSheets({
         headers: ["Stripe ID", "Intellum Path ID"],
+        metadataByColumn: ALL_TAGGED,
         rows: [["Person@Example.com ", "p1"]],
       });
       const client = createMetadataTaggedSheetsClient(sheets, {

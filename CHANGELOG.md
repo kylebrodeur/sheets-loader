@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-09-03
+
+### Changed
+
+- **Breaking:** `MetadataTaggedSheetsClient` / `createMetadataTaggedSheetsClient` are now
+  strictly metadata-only. Column resolution requires pre-existing column-level developer
+  metadata with key `${tagPrefix}${key}` for every configured logical key, for reads and
+  writes alike. The header-name fallback, positional assignment of new columns, and the
+  self-healing auto-tag writes (`createDeveloperMetadata` / header backfill) are removed
+  entirely - when any configured key is untagged, the client throws `SheetConfigError` naming
+  ALL missing metadata keys and never mutates the sheet.
+- **Breaking:** `SheetColumnDefinition` is now just `{ key: string }`; the `header` display
+  label is gone. Appending to an empty but pre-tagged sheet appends data rows only (no
+  synthesized header row).
+- Added exported `MetadataTaggedSheetsClientLike` interface naming the factory's return type.
+
 ## [0.3.0] - 2026-09-01
 
 ### Changed

@@ -6,12 +6,13 @@ import type { SheetSource } from "./MappedSheetsLoader.js";
 
 /**
  * `key` is the stable logical identity used in the metadata tag, row records,
- * and dedupe/match configuration. `header` is the mutable display label used
- * as a fallback when the sheet has no metadata tag for `key` yet.
+ * and dedupe/match configuration. The sheet must already carry column-level
+ * developer metadata with key `${tagPrefix}${key}` for every configured
+ * column; there is no header fallback, no positional mapping, and no
+ * auto-tagging or migration write of any kind.
  */
 export interface SheetColumnDefinition {
   key: string;
-  header: string;
 }
 
 export interface MetadataTaggedSheetsClientConfig {
@@ -65,10 +66,6 @@ function columnToA1(index: number): string {
   return result;
 }
 
-function headerRange(sheetName: string, physicalIndex: number): string {
-  return `${quotedSheetName(sheetName)}!${columnToA1(physicalIndex)}1`;
-}
-
 /**
  * Normalizes a cell value for equality comparisons only (matching/dedupe) -
  * never applied to a value actually written to a cell. Google Sheets rows
@@ -88,31 +85,26 @@ interface CellDataLike {
 
 interface ResolvedColumn {
   key: string;
-  header: string;
   physicalIndex: number;
-  resolvedByMetadata: boolean;
-  isNew: boolean;
 }
 
 interface ResolvedSheetGrid {
-  sheetId: number;
   resolvedColumns: ResolvedColumn[];
   dataRowsByPhysicalIndex: Map<number, string>[];
-  /** Total rows in the grid including the header row - 0 for a fully empty sheet. */
-  totalRowCount: number;
 }
 
 /**
  * Fetches `sheetName`'s grid and resolves every configured logical column to
- * a physical index.
+ * a physical index using column-level developer metadata ONLY: a column is
+ * resolved iff `sheets.data[].columnMetadata[]` carries a metadata entry with
+ * key `${tagPrefix}${logicalKey}`. Header names and physical position never
+ * participate in resolution.
  *
- * Resolution order for each physical column:
- * 1. Column-level developer metadata with key `${tagPrefix}<logicalKey>`, read
- *    from `sheets.data[].columnMetadata[].developerMetadata`.
- * 2. Configured display header matching the first non-metadata row.
- *
- * This is the one resolution algorithm shared by reads and writes, so a
- * column tagged for reading is always the same one written back to.
+ * Every configured logical key must resolve; otherwise a single
+ * `SheetConfigError` is thrown naming ALL missing metadata keys, and no
+ * mutation of the sheet is attempted. This is the one resolution algorithm
+ * shared by reads and writes, so a column read under one logical key is
+ * always the same one written back to.
  */
 async function resolveSheetGrid(
   sheets: sheets_v4.Sheets,
@@ -131,27 +123,17 @@ async function resolveSheetGrid(
   const sheet = spreadsheetRes.data.sheets?.find(
     (s) => s.properties?.title === sheetName,
   );
-  if (!sheet || sheet.properties?.sheetId == null) {
+  if (!sheet) {
     throw new SheetNotFoundError(`${spreadsheetId} (tab "${sheetName}")`);
   }
-  const sheetId = sheet.properties.sheetId;
 
   const gridData = sheet.data?.[0];
   const startColumn = gridData?.startColumn ?? 0;
   const columnMeta = gridData?.columnMetadata ?? [];
   const rowData = gridData?.rowData ?? [];
 
-  const headerByPhysicalIndex = new Map<number, string>();
-  const firstRowValues = rowData[0]?.values as CellDataLike[] | undefined;
-  if (firstRowValues) {
-    for (let i = 0; i < firstRowValues.length; i++) {
-      headerByPhysicalIndex.set(
-        startColumn + i,
-        firstRowValues[i]?.formattedValue ?? "",
-      );
-    }
-  }
-
+  // Row 1 is the display header row by convention (never used for column
+  // resolution); data starts on row 2.
   const dataRowsByPhysicalIndex = rowData
     .slice(1)
     .map((row: { values?: CellDataLike[] | undefined }) => {
@@ -168,48 +150,18 @@ async function resolveSheetGrid(
       return map;
     });
 
-  // Resolve physical columns by metadata first, then by configured header.
   const logicalKeyByPhysicalIndex = new Map<number, string>();
-  const metadataResolvedIndexes = new Set<number>();
-
   for (let i = 0; i < columnMeta.length; i++) {
     const physicalIndex = startColumn + i;
     const metas = columnMeta[i]?.developerMetadata ?? [];
     for (const meta of metas) {
       const key = meta.metadataKey;
       if (!key?.startsWith(tagPrefix)) continue;
-      const logicalKey = key.slice(tagPrefix.length);
-      logicalKeyByPhysicalIndex.set(physicalIndex, logicalKey);
-      metadataResolvedIndexes.add(physicalIndex);
+      logicalKeyByPhysicalIndex.set(physicalIndex, key.slice(tagPrefix.length));
     }
   }
 
-  for (const [physicalIndex, header] of headerByPhysicalIndex.entries()) {
-    if (logicalKeyByPhysicalIndex.has(physicalIndex)) continue;
-    const def = columns.find((c) => c.header === header);
-    if (def) {
-      logicalKeyByPhysicalIndex.set(physicalIndex, def.key);
-    }
-  }
-
-  // Map each configured logical column to a physical index. Existing tagged
-  // or header-matched columns keep their physical position; new columns are
-  // appended after every column already populated in the grid.
-  let nextPhysicalIndex = 0;
-  for (const idx of new Set([
-    ...logicalKeyByPhysicalIndex.keys(),
-    ...headerByPhysicalIndex.keys(),
-  ])) {
-    nextPhysicalIndex = Math.max(nextPhysicalIndex, idx + 1);
-  }
-  for (const row of rowData) {
-    const values = row.values as CellDataLike[] | undefined;
-    const width = (values?.length ?? 0) + startColumn;
-    if (width > nextPhysicalIndex) {
-      nextPhysicalIndex = width;
-    }
-  }
-
+  const missingKeys: string[] = [];
   const resolvedColumns: ResolvedColumn[] = [];
   for (const def of columns) {
     let physicalIndex: number | undefined;
@@ -219,102 +171,30 @@ async function resolveSheetGrid(
         break;
       }
     }
-    const resolvedByMetadata =
-      physicalIndex != null && metadataResolvedIndexes.has(physicalIndex);
-    const isNew = physicalIndex == null;
     if (physicalIndex == null) {
-      physicalIndex = nextPhysicalIndex++;
+      missingKeys.push(def.key);
+    } else {
+      resolvedColumns.push({ key: def.key, physicalIndex });
     }
-    resolvedColumns.push({
-      key: def.key,
-      header: def.header,
-      physicalIndex,
-      resolvedByMetadata,
-      isNew,
-    });
   }
 
-  return {
-    sheetId,
-    resolvedColumns,
-    dataRowsByPhysicalIndex,
-    totalRowCount: rowData.length,
-  };
-}
-
-/** Tags any column not already resolved by metadata, and backfills headers for new columns. */
-async function ensureColumnsTagged(
-  sheets: sheets_v4.Sheets,
-  spreadsheetId: string,
-  sheetName: string,
-  sheetId: number,
-  resolvedColumns: readonly ResolvedColumn[],
-  totalRowCount: number,
-  tagPrefix: string,
-): Promise<void> {
-  // For new columns in an already-populated sheet, write the canonical
-  // display header to row 1 at the exact A1 cell first. Existing headers
-  // are never overwritten. This must precede metadata tagging so a retry
-  // resolves the column by header and completes the tag, rather than
-  // leaving a permanently headerless tagged column.
-  const newColumnHeaders = resolvedColumns
-    .filter((c) => c.isNew && totalRowCount > 0)
-    .sort((a, b) => a.physicalIndex - b.physicalIndex)
-    .map((c) => ({
-      range: headerRange(sheetName, c.physicalIndex),
-      values: [[c.header]],
-    }));
-  if (newColumnHeaders.length > 0) {
-    await sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId,
-      requestBody: { valueInputOption: "RAW", data: newColumnHeaders },
-    });
+  if (missingKeys.length > 0) {
+    const missing = missingKeys.map((key) => `"${tagPrefix}${key}"`);
+    throw new SheetConfigError(
+      `Sheet "${sheetName}" (${spreadsheetId}) is missing required column developer metadata ${missing.join(
+        ", ",
+      )}. Tag each column with developer metadata before reading or writing; this client never resolves columns by header name or position and never writes metadata itself.`,
+    );
   }
 
-  // Bootstrap metadata for any column not resolved by metadata (header
-  // fallback or newly assigned). This metadata-only batchUpdate never
-  // writes cell data.
-  const columnsNeedingMetadata = resolvedColumns
-    .filter((c) => !c.resolvedByMetadata)
-    .sort((a, b) => a.physicalIndex - b.physicalIndex);
-  if (columnsNeedingMetadata.length > 0) {
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: {
-        requests: columnsNeedingMetadata.map((c) => ({
-          createDeveloperMetadata: {
-            developerMetadata: {
-              metadataKey: `${tagPrefix}${c.key}`,
-              metadataValue: c.key,
-              visibility: "DOCUMENT",
-              location: {
-                dimensionRange: {
-                  sheetId,
-                  dimension: "COLUMNS",
-                  startIndex: c.physicalIndex,
-                  endIndex: c.physicalIndex + 1,
-                },
-              },
-            },
-          },
-        })),
-      },
-    });
-  }
+  return { resolvedColumns, dataRowsByPhysicalIndex };
 }
 
 /**
- * A metadata-tag-first, header-fallback, self-healing Google Sheets client.
- *
- * Reads (`loadWithHeaders`) satisfy `SheetSource`, so an instance plugs
- * directly into `MappedSheetsLoader` for typed field mapping. Writes
- * (`appendDedup`, `updateRow`) use the same column resolution, so a column
- * read under one logical key is always the column written back to.
+ * The metadata-tagged client contract: `SheetSource` reads plus `appendDedup`
+ * / `updateRow` writes over the same metadata-resolved columns.
  */
-export function createMetadataTaggedSheetsClient(
-  sheets: sheets_v4.Sheets,
-  config: MetadataTaggedSheetsClientConfig,
-): SheetSource & {
+export interface MetadataTaggedSheetsClientLike extends SheetSource {
   appendDedup(input: SheetsAppendDedupInput): Promise<AppendDedupResult>;
   updateRow(
     spreadsheetId: string,
@@ -322,17 +202,32 @@ export function createMetadataTaggedSheetsClient(
     match: Record<string, string>,
     updates: Record<string, string>,
   ): Promise<UpdateRowResult>;
-} {
+}
+
+/**
+ * A strictly metadata-tagged Google Sheets client.
+ *
+ * Reads (`loadWithHeaders`) satisfy `SheetSource`, so an instance plugs
+ * directly into `MappedSheetsLoader` for typed field mapping. Writes
+ * (`appendDedup`, `updateRow`) use the same column resolution, so a column
+ * read under one logical key is always the column written back to.
+ *
+ * Every configured logical key requires pre-existing column developer
+ * metadata `${tagPrefix}${key}`; missing metadata is a hard error naming all
+ * missing keys, with no header fallback and no auto-tagging write.
+ */
+export function createMetadataTaggedSheetsClient(
+  sheets: sheets_v4.Sheets,
+  config: MetadataTaggedSheetsClientConfig,
+): MetadataTaggedSheetsClientLike {
   const { columns, tagPrefix } = config;
 
-  function requireColumn(key: string): SheetColumnDefinition {
-    const def = columns.find((c) => c.key === key);
-    if (!def) {
+  function requireColumn(key: string): void {
+    if (!columns.some((c) => c.key === key)) {
       throw new SheetConfigError(
         `Column "${key}" is not defined in the configured columns.`,
       );
     }
-    return def;
   }
 
   return {
@@ -363,39 +258,21 @@ export function createMetadataTaggedSheetsClient(
     async appendDedup(
       input: SheetsAppendDedupInput,
     ): Promise<AppendDedupResult> {
-      const {
-        sheetId,
-        resolvedColumns,
-        dataRowsByPhysicalIndex,
-        totalRowCount,
-      } = await resolveSheetGrid(
-        sheets,
-        input.spreadsheetId,
-        input.sheetName,
-        columns,
-        tagPrefix,
-      );
+      for (const key of input.dedupeColumns) requireColumn(key);
+
+      const { resolvedColumns, dataRowsByPhysicalIndex } =
+        await resolveSheetGrid(
+          sheets,
+          input.spreadsheetId,
+          input.sheetName,
+          columns,
+          tagPrefix,
+        );
 
       const dedupeIndexes = input.dedupeColumns.map((key) => {
-        requireColumn(key);
-        const col = resolvedColumns.find((c) => c.key === key);
-        if (!col) {
-          throw new SheetConfigError(
-            `Dedupe column "${key}" could not be resolved for sheet "${input.sheetName}".`,
-          );
-        }
+        const col = resolvedColumns.find((c) => c.key === key)!;
         return col.physicalIndex;
       });
-
-      await ensureColumnsTagged(
-        sheets,
-        input.spreadsheetId,
-        input.sheetName,
-        sheetId,
-        resolvedColumns,
-        totalRowCount,
-        tagPrefix,
-      );
 
       const seenKeys = new Set<string>();
       for (const row of dataRowsByPhysicalIndex) {
@@ -433,25 +310,12 @@ export function createMetadataTaggedSheetsClient(
         return { appended: 0, skipped };
       }
 
-      let appendValues = toAppend;
-      if (totalRowCount === 0) {
-        const headerMaxIndex = Math.max(
-          0,
-          ...resolvedColumns.map((c) => c.physicalIndex),
-        );
-        const headerRow = new Array(headerMaxIndex + 1).fill("");
-        for (const col of resolvedColumns) {
-          headerRow[col.physicalIndex] = col.header;
-        }
-        appendValues = [headerRow, ...toAppend];
-      }
-
       await sheets.spreadsheets.values.append({
         spreadsheetId: input.spreadsheetId,
         range: a1Range(input.sheetName, "A1"),
         valueInputOption: "RAW",
         insertDataOption: "INSERT_ROWS",
-        requestBody: { values: appendValues },
+        requestBody: { values: toAppend },
       });
 
       return { appended: toAppend.length, skipped };
@@ -472,18 +336,14 @@ export function createMetadataTaggedSheetsClient(
       for (const key of matchKeys) requireColumn(key);
       for (const key of Object.keys(updates)) requireColumn(key);
 
-      const {
-        sheetId,
-        resolvedColumns,
-        dataRowsByPhysicalIndex,
-        totalRowCount,
-      } = await resolveSheetGrid(
-        sheets,
-        spreadsheetId,
-        sheetName,
-        columns,
-        tagPrefix,
-      );
+      const { resolvedColumns, dataRowsByPhysicalIndex } =
+        await resolveSheetGrid(
+          sheets,
+          spreadsheetId,
+          sheetName,
+          columns,
+          tagPrefix,
+        );
 
       // Every match column must equal (AND semantics) - a single-column match
       // is just this with one entry. Compound matches exist because some
@@ -491,12 +351,7 @@ export function createMetadataTaggedSheetsClient(
       // from the same order can share it, so a second, more selective column
       // narrows to the exact intended row regardless of physical row order.
       const matchCols = matchKeys.map((key) => {
-        const col = resolvedColumns.find((c) => c.key === key);
-        if (!col) {
-          throw new SheetConfigError(
-            `Match column "${key}" could not be resolved for sheet "${sheetName}".`,
-          );
-        }
+        const col = resolvedColumns.find((c) => c.key === key)!;
         return { physicalIndex: col.physicalIndex, value: normalizeForMatch(match[key]!) };
       });
 
@@ -519,16 +374,6 @@ export function createMetadataTaggedSheetsClient(
           values: [[value]],
         };
       });
-
-      await ensureColumnsTagged(
-        sheets,
-        spreadsheetId,
-        sheetName,
-        sheetId,
-        resolvedColumns,
-        totalRowCount,
-        tagPrefix,
-      );
 
       await sheets.spreadsheets.values.batchUpdate({
         spreadsheetId,
@@ -558,7 +403,7 @@ export class MetadataTaggedSheetsClient {
   private readonly authConfig?: AuthConfig;
   private readonly explicitAuthClient?: JWT | OAuth2Client;
   private readonly config: MetadataTaggedSheetsClientConfig;
-  private delegate?: ReturnType<typeof createMetadataTaggedSheetsClient>;
+  private delegate?: MetadataTaggedSheetsClientLike;
 
   constructor(config: MetadataTaggedSheetsClientConfigWithAuth) {
     this.authConfig = config.auth;

@@ -204,8 +204,12 @@ See [`examples/mapped-loader.ts`](examples/mapped-loader.ts) for the full runnab
 `MappedSheetsLoader` (above) renames columns by matching literal header text — fragile if someone
 renames or reorders a column in the sheet. `MetadataTaggedSheetsClient` resolves columns by a
 Google Sheets column-level [developer metadata](https://developers.google.com/sheets/api/guides/metadata)
-tag first, falling back to header-name matching only when no tag exists yet — and self-heals by
-tagging any header-resolved or brand-new column going forward. It also supports writing: append
+tag, and ONLY by that tag: every configured logical key must already exist as column-level
+developer metadata with key `${tagPrefix}${key}` on the sheet, for reads and writes alike. There
+is no header-name fallback, no positional mapping, and no auto-tagging or migration write — if any
+configured key is untagged, the client throws `SheetConfigError` naming all missing metadata keys
+and leaves the sheet untouched. Tag the columns up front (e.g. one-off via the Sheets API's
+`createDeveloperMetadata`, or an admin script), then use the client for reads and writes: append
 rows with dedupe, and update specific cells in an already-matched row.
 
 ```ts
@@ -215,8 +219,8 @@ const client = new MetadataTaggedSheetsClient({
   auth: { credentials: "./sa.json" },
   tagPrefix: "myapp:", // your own namespace, so unrelated tools don't collide
   columns: [
-    { key: "cohortId", header: "Stripe ID" },
-    { key: "intellumPathId", header: "Intellum Path ID" },
+    { key: "cohortId" },        // requires existing "myapp:cohortId" column metadata
+    { key: "intellumPathId" },  // requires existing "myapp:intellumPathId" column metadata
   ],
 });
 

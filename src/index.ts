@@ -112,6 +112,7 @@ export {
 } from "./MetadataTaggedSheetsClient.js";
 export type {
   SheetColumnDefinition,
+  MetadataTaggedSheetsClientLike,
   MetadataTaggedSheetsClientConfig,
   MetadataTaggedSheetsClientConfigWithAuth,
   SheetsAppendDedupInput,
